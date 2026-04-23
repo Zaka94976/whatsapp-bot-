@@ -1,0 +1,86 @@
+trigger:
+  branches:
+    include:
+      - main
+      - master
+
+pr: none
+
+variables:
+  nodeVersion: '20.x'
+  azureServiceConnection: 'azure-service-connection'
+  webAppName: 'whatsapp-bot-app'
+  appType: 'webAppLinux'
+  artifactName: 'drop'
+  packageName: 'whatsapp-bot.zip'
+
+stages:
+  - stage: Build
+    displayName: Build
+    jobs:
+      - job: BuildApp
+        displayName: Build app package
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: NodeTool@0
+            displayName: Use Node.js $(nodeVersion)
+            inputs:
+              versionSpec: '$(nodeVersion)'
+
+          - task: CopyFiles@2
+            displayName: Stage deployable files
+            inputs:
+              SourceFolder: '$(Build.SourcesDirectory)'
+              Contents: |
+                package*.json
+                *.js
+                *.html
+                *.css
+                *.jsx
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/app'
+
+          - script: npm ci --omit=dev
+            displayName: Install production dependencies
+            workingDirectory: '$(Build.ArtifactStagingDirectory)/app'
+
+          - script: node --check server.js
+            displayName: Validate server syntax
+            workingDirectory: '$(Build.ArtifactStagingDirectory)/app'
+
+          - task: ArchiveFiles@2
+            displayName: Create zip package
+            inputs:
+              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/app'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/$(packageName)'
+              replaceExistingArchive: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)/$(packageName)'
+            displayName: Publish pipeline artifact
+            artifact: '$(artifactName)'
+
+  - stage: Deploy
+    displayName: Deploy
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: DeployToAzure
+        displayName: Deploy to Azure App Service
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - download: current
+            artifact: '$(artifactName)'
+
+          - task: AzureWebApp@1
+            displayName: Deploy web app
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              appType: '$(appType)'
+              appName: '$(webAppName)'
+              package: '$(Pipeline.Workspace)/$(artifactName)/$(packageName)'
+              deploymentMethod: 'auto'

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Bot Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0a0f;
+      color: #fff;
+      min-height: 100vh;
+    }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const API_URL = 'http://localhost:3000/api/alldata';
+
+    const styles = {
+      dashboard: {
+        background: 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%)',
+        minHeight: '100vh',
+        padding: '24px',
+      },
+      container: { maxWidth: '1400px', margin: '0 auto' },
+      header: {
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '20px',
+        padding: '24px',
+        marginBottom: '24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px'
+      },
+      logo: { display: 'flex', alignItems: 'center', gap: '12px' },
+      logoIcon: {
+        width: '48px', height: '48px',
+        background: 'linear-gradient(135deg, #25d366, #128c7e)',
+        borderRadius: '14px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '24px'
+      },
+      title: {
+        fontSize: '24px', fontWeight: '700',
+        background: 'linear-gradient(135deg, #25d366, #128c7e)',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+      },
+      liveBadge: {
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '8px 16px',
+        background: 'rgba(37,211,102,0.15)',
+        border: '1px solid rgba(37,211,102,0.3)',
+        borderRadius: '20px',
+        color: '#25d366', fontSize: '13px', fontWeight: '600'
+      },
+      dot: {
+        width: '8px', height: '8px', background: '#25d366',
+        borderRadius: '50%', animation: 'pulse 2s infinite'
+      },
+      statsGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '16px',
+        marginBottom: '24px'
+      },
+      statCard: {
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '16px', padding: '20px', textAlign: 'center',
+        transition: 'all 0.3s ease'
+      },
+      statIcon: { fontSize: '24px', marginBottom: '8px' },
+      statValue: { fontSize: '32px', fontWeight: '700', marginBottom: '4px' },
+      statLabel: { fontSize: '11px', textTransform: 'uppercase', opacity: 0.6 },
+      contentGrid: {
+        display: 'grid', gridTemplateColumns: 'repeat(2, 1fr))', gap: '20px', marginBottom: '24px'
+      },
+      card: {
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: '16px', overflow: 'hidden'
+      },
+      cardFull: { gridColumn: '1 / -1' },
+      cardHeader: {
+        padding: '16px 20px', fontWeight: '600', fontSize: '14px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      },
+      badge: {
+        background: 'rgba(255,255,255,0.15)',
+        padding: '4px 12px', borderRadius: '20px', fontSize: '12px'
+      },
+      cardBody: { maxHeight: '350px', overflowY: 'auto', padding: '12px' },
+      msgItem: {
+        display: 'flex', gap: '12px', padding: '12px',
+        borderRadius: '12px', marginBottom: '8px',
+        background: 'rgba(255,255,255,0.03)'
+      },
+      avatar: {
+        width: '40px', height: '40px', borderRadius: '12px',
+        background: 'linear-gradient(135deg, #25d366, #128c7e)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: '700', flexShrink: 0
+      },
+      msgContent: { flex: 1, minWidth: 0 },
+      msgHeader: {
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: '4px'
+      },
+      msgName: { fontWeight: '600', fontSize: '14px' },
+      msgTime: { fontSize: '11px', opacity: 0.5 },
+      msgText: {
+        fontSize: '14px', color: 'rgba(255,255,255,0.8)',
+        background: 'rgba(255,255,255,0.05)', padding: '8px 12px',
+        borderRadius: '8px', wordBreak: 'break-word'
+      },
+      statusItem: {
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', padding: '12px', borderRadius: '10px',
+        marginBottom: '8px', background: 'rgba(255,255,255,0.03)'
+      },
+      statusBadge: {
+        padding: '6px 12px', borderRadius: '20px',
+        fontSize: '12px', fontWeight: '500'
+      },
+      userItem: {
+        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '12px', borderRadius: '12px',
+        marginBottom: '8px', background: 'rgba(255,255,255,0.03)'
+      },
+      userInfo: { flex: 1 },
+      userName: { fontWeight: '600', fontSize: '14px' },
+      userId: { fontSize: '12px', opacity: 0.5, fontFamily: 'monospace' },
+      empty: {
+        textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)'
+      },
+      emptyIcon: { fontSize: '40px', display: 'block', marginBottom: '8px' },
+      loading: {
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', minHeight: '100vh'
+      },
+      spinner: {
+        width: '48px', height: '48px',
+        border: '4px solid rgba(255,255,255,0.1)',
+        borderTopColor: '#25d366', borderRadius: '50%',
+        animation: 'spin 1s linear infinite', marginBottom: '16px'
+      },
+      footer: { textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.4)', fontSize: '12px' },
+      apiUrl: {
+        fontFamily: 'monospace', fontSize: '12px',
+        color: 'rgba(255,255,255,0.4)',
+        background: 'rgba(0,0,0,0.4)', padding: '8px 12px', borderRadius: '8px'
+      }
+    };
+
+    const colors = {
+      incoming: { bg: 'rgba(37,211,102,0.15)', border: 'rgba(37,211,102,0.3)', text: '#25d366' },
+      outgoing: { bg: 'rgba(18,140,126,0.15)', border: 'rgba(18,140,126,0.3)', text: '#128c7e' },
+      status: { bg: 'rgba(245,87,108,0.15)', border: 'rgba(245,87,108,0.3)', text: '#fd79a8' },
+      users: { bg: 'rgba(79,172,254,0.15)', border: 'rgba(79,172,254,0.3)', text: '#74b9ff' }
+    };
+
+    function App() {
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        fetchData();
+        const interval = setInterval(fetchData, 5000);
+        return () => clearInterval(interval);
+      }, []);
+
+      const fetchData = async () => {
+        try {
+          const res = await fetch(API_URL);
+          if (!res.ok) throw new Error('Failed');
+          const json = await res.json();
+          setData(json);
+          setError(null);
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      if (loading && !data) {
+        return (
+          <div style={styles.loading}>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+            <div style={styles.spinner}></div>
+            <p>Loading...</p>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div style={styles.loading}>
+            <div style={{...styles.empty, fontSize: '18px'}}>
+              <span style={styles.emptyIcon}>⚠️</span>
+              <p>Error: {error}</p>
+              <p style={{marginTop: '8px', fontSize: '14px'}}>Make sure server is running on http://localhost:3000</p>
+              <button onClick={fetchData} style={{
+                marginTop: '20px', padding: '10px 24px',
+                background: 'linear-gradient(135deg, #25d366, #128c7e)',
+                border: 'none', borderRadius: '20px', color: 'white',
+                fontWeight: '600', cursor: 'pointer'
+              }}>Retry</button>
+            </div>
+          </div>
+        );
+      }
+
+      const s = data?.stats || {};
+      const incoming = data?.incoming || [];
+      const outgoing = data?.outgoing || [];
+      const statuses = data?.statuses || [];
+      const users = data?.users || [];
+      const events = data?.events || [];
+
+      return (
+        <div style={styles.dashboard}>
+          <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }`}</style>
+          <div style={styles.container}>
+            <header style={styles.header}>
+              <div style={styles.logo}>
+                <div style={styles.logoIcon}>💬</div>
+                <h1 style={styles.title}>WhatsApp Bot</h1>
+              </div>
+              <div style={styles.liveBadge}>
+                <span style={styles.dot}></span>
+                Live
+              </div>
+            </header>
+
+            <div style={styles.apiUrl}>📡 {API_URL}</div>
+
+            <div style={styles.statsGrid}>
+              <div style={styles.statCard}><div style={styles.statIcon}>📊</div><div style={{...styles.statValue, color: '#a29bfe'}}>{s.totalEvents||0}</div><div style={styles.statLabel}>Total Events</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>📥</div><div style={{...styles.statValue, color: '#25d366'}}>{s.incomingCount||0}</div><div style={styles.statLabel}>Received</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>📤</div><div style={{...styles.statValue, color: '#fd79a8'}}>{s.outgoingCount||0}</div><div style={styles.statLabel}>Sent</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>👥</div><div style={{...styles.statValue, color: '#74b9ff'}}>{s.uniqueUsers||0}</div><div style={styles.statLabel}>Users</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>✅</div><div style={{...styles.statValue, color: '#00b894'}}>{s.sentStatus||0}</div><div style={styles.statLabel}>Sent</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>📬</div><div style={{...styles.statValue, color: '#fdcb6e'}}>{s.deliveredStatus||0}</div><div style={styles.statLabel}>Delivered</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>👁️</div><div style={{...styles.statValue, color: '#0984e3'}}>{s.readStatus||0}</div><div style={styles.statLabel}>Read</div></div>
+              <div style={styles.statCard}><div style={styles.statIcon}>💬</div><div style={{...styles.statValue, color: '#e17055'}}>{s.totalMessages||0}</div><div style={styles.statLabel}>Messages</div></div>
+            </div>
+
+            <div style={styles.contentGrid}>
+              <div style={styles.card}>
+                <div style={{...styles.cardHeader, ...colors.incoming}}>
+                  <span>📥 Incoming</span><span style={styles.badge}>{incoming.length}</span>
+                </div>
+                <div style={styles.cardBody}>
+                  {incoming.length === 0 ? (
+                    <div style={styles.empty}><span style={styles.emptyIcon}>📭</span>No messages</div>
+                  ) : incoming.slice(0,6).map((e,i) => (
+                    <div key={i} style={styles.msgItem}>
+                      <div style={styles.avatar}>{e.name?.charAt(0)||'U'}</div>
+                      <div style={styles.msgContent}>
+                        <div style={styles.msgHeader}><span style={styles.msgName}>{e.name}</span><span style={styles.msgTime}>{e.displayTime}</span></div>
+                        <div style={styles.msgText}>{e.body}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.card}>
+                <div style={{...styles.cardHeader, ...colors.outgoing}}>
+                  <span>📤 Outgoing</span><span style={styles.badge}>{outgoing.length}</span>
+                </div>
+                <div style={styles.cardBody}>
+                  {outgoing.length === 0 ? (
+                    <div style={styles.empty}><span style={styles.emptyIcon}>📤</span>No messages</div>
+                  ) : outgoing.slice(0,6).map((e,i) => (
+                    <div key={i} style={styles.msgItem}>
+                      <div style={styles.msgContent}>
+                        <div style={styles.msgHeader}><span style={styles.msgName}>To: {e.from}</span><span style={styles.msgTime}>{e.displayTime}</span></div>
+                        <div style={styles.msgText}>{e.body}</div>
+                      </div>
+                      <div style={{...styles.avatar, background: 'linear-gradient(135deg, #128c7e, #075e54)'}}>✓</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.card}>
+                <div style={{...styles.cardHeader, ...colors.status}}>
+                  <span>📊 Status</span><span style={styles.badge}>{statuses.length}</span>
+                </div>
+                <div style={styles.cardBody}>
+                  {statuses.length === 0 ? (
+                    <div style={styles.empty}><span style={styles.emptyIcon}>📊</span>No status</div>
+                  ) : statuses.slice(0,6).map((e,i) => (
+                    <div key={i} style={styles.statusItem}>
+                      <span style={{...styles.statusBadge, background: e.status==='read'?'rgba(33,150,243,0.2)':e.status==='delivered'?'rgba(245,124,0,0.2)':'rgba(46,125,50,0.2)', color: e.status==='read'?'#2196f3':e.status==='delivered'?'#f57c00':'#2e7d32'}}>
+                        {e.status==='read'?'👁️':e.status==='delivered'?'📬':'✅'} {e.status}
+                      </span>
+                      <span style={styles.msgTime}>{e.displayTime}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.card}>
+                <div style={{...styles.cardHeader, ...colors.users}}>
+                  <span>👥 Users</span><span style={styles.badge}>{users.length}</span>
+                </div>
+                <div style={styles.cardBody}>
+                  {users.length === 0 ? (
+                    <div style={styles.empty}><span style={styles.emptyIcon}>👤</span>No users</div>
+                  ) : users.slice(0,6).map((u,i) => (
+                    <div key={i} style={styles.userItem}>
+                      <div style={{...styles.avatar, background: 'linear-gradient(135deg, #4facfe, #00f2fe)'}}>{u.name?.charAt(0)||'U'}</div>
+                      <div style={styles.userInfo}>
+                        <div style={styles.userName}>{u.name||'Unknown'}</div>
+                        <div style={styles.userId}>{u.wa_id}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <footer style={styles.footer}>
+              <p>Last updated: {new Date(data?.timestamp||new Date()).toLocaleString()}</p>
+              <p>Auto-refreshes every 5 seconds</p>
+            </footer>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
