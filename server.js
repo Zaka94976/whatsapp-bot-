@@ -203,7 +203,8 @@ async function downloadMedia(mediaId) {
       headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
     });
     fs.writeFileSync(filepath, Buffer.from(fileRes.data));
-    const fileUrl = `http://localhost:${PORT}/uploads/${filename}`;
+    const baseUrl = process.env.BASE_URL || `https://my-nodejs-rg-g0gfb9cgd8f0cuf9.southindia-01.azurewebsites.net`;
+    const fileUrl = `${baseUrl}/uploads/${filename}`;
     console.log('File saved:', fileUrl);
     return fileUrl;
   } catch (e) {
@@ -445,7 +446,7 @@ app.post("/api/send/media", upload.single("file"), async (req, res) => {
     let mediaUrl;
 
     if (useUrl === 'true' || !file) {
-      mediaUrl = req.body.mediaUrl || `http://localhost:${PORT}/uploads/${file.filename}`;
+      mediaUrl = req.body.mediaUrl || `https://my-nodejs-rg-g0gfb9cgd8f0cuf9.southindia-01.azurewebsites.net/uploads/${file.filename}`;
       await sendMedia(recipient, type, mediaUrl, caption);
       res.json({ success: true, to: recipient, type, mediaUrl, caption, method: 'url' });
     } else {
@@ -456,7 +457,7 @@ app.post("/api/send/media", upload.single("file"), async (req, res) => {
       }
       
       // Store local file URL for Flutter to access
-      const localFileUrl = `http://localhost:${PORT}/uploads/${file.filename}`;
+      const localFileUrl = `https://my-nodejs-rg-g0gfb9cgd8f0cuf9.southindia-01.azurewebsites.net/uploads/${file.filename}`;
       
       mediaId = await uploadMediaToWhatsApp(file.path, file.mimetype);
       await sendMediaWithId(recipient, type, mediaId, caption, file.originalname, localFileUrl);
@@ -472,6 +473,15 @@ app.get("/dashboard", (req, res) => {
   res.sendFile(__dirname + "/dashboard.html");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+function resetAppState() {
+  allEvents.length = 0;
+  sessions.clear();
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export { app, allEvents, sessions, resetAppState };
