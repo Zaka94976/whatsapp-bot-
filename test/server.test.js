@@ -489,10 +489,12 @@ test("POST /api/send records outgoing text and calls WhatsApp API", async () => 
   assert.equal(messages[0].body, "Project test message");
   assert.equal(axiosPostCalls.length, 1);
   assert.equal(axiosPostCalls[0][1].to, "15551234567");
+  assert.equal(axiosPostCalls[0][1].recipient_type, "individual");
+  assert.equal(axiosPostCalls[0][1].type, "text");
   assert.equal(axiosPostCalls[0][1].text.body, "Project test message");
 });
 
-test("POST /api/send still records outgoing message when WhatsApp API fails", async () => {
+test("POST /api/send returns API errors and does not record failed outgoing messages", async () => {
   axios.post = async (...args) => {
     axiosPostCalls.push(args);
     throw new Error("WhatsApp API unavailable");
@@ -507,18 +509,35 @@ test("POST /api/send still records outgoing message when WhatsApp API fails", as
     })
   });
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 500);
   assert.deepEqual(await response.json(), {
-    success: true,
-    to: "15551234567",
-    text: "Failure path message"
+    error: "WhatsApp API unavailable"
   });
 
   const outgoing = await fetch(`${baseUrl}/api/outgoing`).then((res) => res.json());
 
-  assert.equal(outgoing.length, 1);
-  assert.equal(outgoing[0].body, "Failure path message");
+  assert.equal(outgoing.length, 0);
   assert.equal(axiosPostCalls.length, 1);
+});
+
+test("POST /api/send normalizes recipients with plus signs and spaces", async () => {
+  const response = await fetch(`${baseUrl}/api/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: "+91 85120 59849",
+      text: "Normalized message"
+    })
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    to: "918512059849",
+    text: "Normalized message"
+  });
+
+  assert.equal(axiosPostCalls[0][1].to, "918512059849");
 });
 
 test("POST /send validates required fields before sending", async () => {

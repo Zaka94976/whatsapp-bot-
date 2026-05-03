@@ -33,6 +33,47 @@ if (!fs.existsSync(uploadPath)) {
 const allEvents = [];
 const sessions = new Map();
 
+function normalizeWhatsAppRecipient(value) {
+  return String(value || "").trim().replace(/^\+/, "").replace(/[^\d]/g, "");
+}
+
+function getWhatsAppErrorMessage(error) {
+  const apiError = error.response?.data?.error;
+  if (apiError?.message) {
+    return `${apiError.message}${apiError.code ? ` (code ${apiError.code})` : ""}`;
+  }
+
+  if (error.response?.data) {
+    return JSON.stringify(error.response.data);
+  }
+
+  return error.message;
+}
+
+async function postToWhatsApp(path, payload, headers = {}) {
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+    throw new Error("Missing WHATSAPP_TOKEN or PHONE_NUMBER_ID configuration");
+  }
+
+  try {
+    return await axios.post(
+      `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/${path}`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json",
+          ...headers
+        }
+      }
+    );
+  } catch (error) {
+    const detail = getWhatsAppErrorMessage(error);
+    console.error(`WhatsApp API error sending to ${payload.to || "media"}:`, detail);
+    throw new Error(detail);
+  }
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadPath),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
@@ -166,23 +207,32 @@ app.post("/webhook", async (req, res) => {
 });
 
 async function sendMessage(to, text) {
+  const recipient = normalizeWhatsAppRecipient(to);
   const messageText = text || 'Message received';
+  if (!recipient) {
+    throw new Error("Invalid WhatsApp recipient");
+  }
+
+  const response = await postToWhatsApp("messages", {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "text",
+    text: { body: messageText }
+  });
+
   const event = {
-    id: "out_" + Date.now(),
+    id: response.data?.messages?.[0]?.id || "out_" + Date.now(),
     type: "message",
     direction: "outgoing",
-    from: to,
+    from: recipient,
     body: messageText,
     displayTime: new Date().toLocaleString(),
     createdAt: new Date().toISOString()
   };
   allEvents.unshift(event);
 
-  axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
-    { messaging_product: "whatsapp", to: to, text: { body: messageText } },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
-  ).catch(e => console.error("Error sending auto-reply:", e.message));
+  return event;
 }
 
 async function downloadMedia(mediaId) {
@@ -215,6 +265,11 @@ async function downloadMedia(mediaId) {
 }
 
 async function sendMedia(to, mediaType, mediaUrl, caption) {
+  const recipient = normalizeWhatsAppRecipient(to);
+  if (!recipient) {
+    throw new Error("Invalid WhatsApp recipient");
+  }
+
   const mediaTypes = {
     image: "image",
     audio: "audio",
@@ -222,11 +277,25 @@ async function sendMedia(to, mediaType, mediaUrl, caption) {
     document: "document"
   };
   
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: mediaTypes[mediaType],
+    [mediaTypes[mediaType]]: { link: mediaUrl }
+  };
+  
+  if (caption) {
+    payload[mediaTypes[mediaType]].caption = caption;
+  }
+
+  const response = await postToWhatsApp("messages", payload);
+
   const event = {
-    id: "out_" + Date.now(),
+    id: response.data?.messages?.[0]?.id || "out_" + Date.now(),
     type: mediaType,
     direction: "outgoing",
-    from: to,
+    from: recipient,
     body: caption || mediaUrl,
     msgType: mediaType,
     fileUrl: mediaUrl,
@@ -236,22 +305,7 @@ async function sendMedia(to, mediaType, mediaUrl, caption) {
   };
   allEvents.unshift(event);
 
-  const payload = {
-    messaging_product: "whatsapp",
-    to: to,
-    type: mediaTypes[mediaType],
-    [mediaTypes[mediaType]]: { link: mediaUrl }
-  };
-  
-  if (caption) {
-    payload[mediaTypes[mediaType]].caption = caption;
-  }
-
-  axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
-    payload,
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
-  ).catch(e => console.error("Error sending media:", e.message));
+  return event;
 }
 
 async function uploadMediaToWhatsApp(filePath, mimeType) {
@@ -260,21 +314,17 @@ async function uploadMediaToWhatsApp(filePath, mimeType) {
   form.append('type', mimeType);
   form.append('messaging_product', 'whatsapp');
 
-  const response = await axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/media`,
-    form,
-    {
-      headers: {
-        ...form.getHeaders(),
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`
-      }
-    }
-  );
+  const response = await postToWhatsApp("media", form, form.getHeaders());
   
   return response.data.id;
 }
 
 async function sendMediaWithId(to, mediaType, mediaId, caption, filename, fileUrl) {
+  const recipient = normalizeWhatsAppRecipient(to);
+  if (!recipient) {
+    throw new Error("Invalid WhatsApp recipient");
+  }
+
   const mediaTypes = {
     image: 'image',
     audio: 'audio',
@@ -300,16 +350,19 @@ async function sendMediaWithId(to, mediaType, mediaId, caption, filename, fileUr
 
   const payload = {
     messaging_product: 'whatsapp',
-    to: to,
+    recipient_type: "individual",
+    to: recipient,
     type: mediaTypes[mediaType],
     [mediaTypes[mediaType]]: mediaPayload
   };
 
+  const response = await postToWhatsApp("messages", payload);
+
   const event = {
-    id: "out_" + Date.now(),
+    id: response.data?.messages?.[0]?.id || "out_" + Date.now(),
     type: mediaType,
     direction: "outgoing",
-    from: to,
+    from: recipient,
     body: displayCaption,
     msgType: mediaType,
     fileUrl: fileUrl || null,
@@ -320,16 +373,7 @@ async function sendMediaWithId(to, mediaType, mediaId, caption, filename, fileUr
   };
   allEvents.unshift(event);
 
-  await axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
-    payload,
-    {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  return event;
 }
 
 app.get("/api/stats", (req, res) => {
@@ -400,14 +444,15 @@ app.get("/api/users", (req, res) => {
 
 app.post("/api/send", async (req, res) => {
   const { to, text } = req.body;
+  const recipient = normalizeWhatsAppRecipient(to);
   
-  if (!to || !text) {
+  if (!recipient || !text) {
     return res.status(400).json({ error: "Missing 'to' or 'text' parameter" });
   }
 
   try {
-    await sendMessage(to, text);
-    res.json({ success: true, to, text });
+    await sendMessage(recipient, text);
+    res.json({ success: true, to: recipient, text });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -415,13 +460,14 @@ app.post("/api/send", async (req, res) => {
 
 app.post("/send", async (req, res) => {
   const { text, phone } = req.body;
+  const recipient = normalizeWhatsAppRecipient(phone);
   
-  if (!text || !phone) {
+  if (!text || !recipient) {
     return res.status(400).json({ error: "Missing 'text' or 'phone' parameter" });
   }
 
   try {
-    await sendMessage(phone, text);
+    await sendMessage(recipient, text);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -431,7 +477,7 @@ app.post("/send", async (req, res) => {
 app.post("/api/send/media", upload.single("file"), async (req, res) => {
   const { to, phone, type, caption, useUrl } = req.body;
   const file = req.file;
-  const recipient = to || phone;
+  const recipient = normalizeWhatsAppRecipient(to || phone);
   
   if (!recipient || !type) {
     return res.status(400).json({ error: "Missing 'to/phone' or 'type' parameter" });
